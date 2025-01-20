@@ -1,0 +1,91 @@
+#include <iostream>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib, "ws2_32.lib")
+
+void scanTCP(const std::string& ip, int port) {
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "Ошибка создания сокета: " << WSAGetLastError() << std::endl;
+        return;
+    }
+
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(port);
+    inet_pton(AF_INET, ip.c_str(), &server.sin_addr);
+
+    int result = connect(sock, (struct sockaddr*)&server, sizeof(server));
+    if (result == SOCKET_ERROR) {
+        std::cout << "Порт " << port << " закрыт." << std::endl;
+    } else {
+        std::cout << "Порт " << port << " открыт." << std::endl;
+        closesocket(sock);
+    }
+}
+
+void scanUDP(const std::string& ip, int port) {
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "Ошибка создания сокета: " << WSAGetLastError() << std::endl;
+        return;
+    }
+
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(port);
+    inet_pton(AF_INET, ip.c_str(), &server.sin_addr);
+
+    const char* message = "Ping";
+    sendto(sock, message, strlen(message), 0, (struct sockaddr*)&server, sizeof(server));
+
+    struct timeval tv;
+    tv.tv_sec = 1; 
+    tv.tv_usec = 0;
+    
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+
+    char buffer[1024];
+    int addr_len = sizeof(server);
+    
+    int response = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&server, &addr_len);
+    
+    if (response == SOCKET_ERROR) {
+        std::cout << "Порт " << port << " закрыт или не отвечает." << std::endl;
+    } else {
+        std::cout << "Порт " << port << " открыт." << std::endl;
+    }
+
+    closesocket(sock);
+}
+
+int main() {
+    WSADATA wsaData;
+    
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "Ошибка инициализации Winsock: " << WSAGetLastError() << std::endl;
+        return 1;
+    }
+
+    std::string ipAddress;
+    int startPort, endPort;
+
+    std::cout << "Введите IP-адрес для сканирования: ";
+    std::cin >> ipAddress;
+
+    std::cout << "Введите диапазон портов (начальный и конечный): ";
+    std::cin >> startPort >> endPort;
+
+    for (int port = startPort; port <= endPort; ++port) {
+        scanTCP(ipAddress, port);
+        scanUDP(ipAddress, port);
+    }
+
+    WSACleanup();
+    
+    return 0;
+}
